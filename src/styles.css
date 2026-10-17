@@ -522,9 +522,6 @@
 .preference-bar .destination-field {
   min-width: 130px;
 }
-.preference-bar .destination-field:last-of-type {
-  border-right: 1px solid var(--border);
-}
 .preference-toggle,
 .preference-chips {
   display: flex;
@@ -539,7 +536,7 @@
   transition: background 0.2s ease;
 }
 .preference-chip[aria-pressed="true"] {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border-color: var(--primary);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-color: var(--color-primary);
 }
