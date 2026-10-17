@@ -64,7 +64,7 @@ export function buildPlan(city: string, prefs: Prefs, places: Place[], top: Neig
 }
 class LocalityError extends Error {}
 export async function queryQloo(input: z.infer<typeof agentInput>, key: string | undefined, fetcher: typeof fetch = fetch): Promise<AgentResult> {
-  const { city, message } = agentInput.parse(input);
+  const { city, message, prefs = {} } = agentInput.parse(input);
   if (!resolveCity(city)) throw new Error("Choose a recognized city before finding matches");
   const steps: AgentStep[] = [];
   // Query strings are built by hand so the request matches Qloo's documented form exactly (colons in URNs unescaped).
@@ -93,7 +93,7 @@ export async function queryQloo(input: z.infer<typeof agentInput>, key: string |
     return parsed.data.results;
   };
   try {
-    const terms = [...new Set(message.toLowerCase().replace(/[^\p{L}\p{N}\s,-]/gu, " ").split(/,|\band\b|\bwith\b/).map((s) => s.replace(/^(i love|i like|i'm into|i am into|i enjoy)\s+/, "").trim()).filter(Boolean))].slice(0, 3);
+    const terms = [...new Set([...message.toLowerCase().replace(/[^\p{L}\p{N}\s,-]/gu, " ").split(/,|\band\b|\bwith\b/).map((s) => s.replace(/^(i love|i like|i'm into|i am into|i enjoy)\s+/, "").trim()).filter(Boolean)), ...(prefs.chips ?? []).map((c) => c.toLowerCase())])].slice(0, 4);
     // Run the exact place-insights request alongside taste lookups; tag failures only mean no heatmap signal.
     const placesCall = call(`Qloo ${city} place insights`, "/v2/insights", [["filter.type", "urn:entity:place"], ["filter.location.query", city], ["take", "20"]]);
     placesCall.catch(() => {});
@@ -155,9 +155,9 @@ export async function queryQloo(input: z.infer<typeof agentInput>, key: string |
     return { city, mode: "qloo", source: "qloo", status: "ok", summary, spoken: summary, steps, neighborhoods: top, places, plan };
   } catch (e) {
     // A 400 "unable to resolve to a valid locality" means Qloo has no coverage here: show the unavailable blank, not an error.
-    if (e instanceof LocalityError) return blank(city, "unavailable", steps);
+    if (e instanceof LocalityError) return blank(city, "unavailable", steps, prefs.climate);
     try {
-      const sample = await runSampleAgent(message, "qloo", undefined, city);
+      const sample = await runSampleAgent(message || (prefs.chips ?? []).join(", "), "qloo", undefined, city);
       return { ...sample, steps, summary: `Qloo couldn't load ${city} right now. Showing same-city sample recommendations, not live Qloo results. ${sample.summary}` };
     } catch { return blank(city, "error", steps); }
   }
