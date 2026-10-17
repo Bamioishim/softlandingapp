@@ -93,7 +93,8 @@ export async function queryQloo(input: z.infer<typeof agentInput>, key: string |
     return parsed.data.results;
   };
   try {
-    const terms = [...new Set([...message.toLowerCase().replace(/[^\p{L}\p{N}\s,-]/gu, " ").split(/,|\band\b|\bwith\b/).map((s) => s.replace(/^(i love|i like|i'm into|i am into|i enjoy)\s+/, "").trim()).filter(Boolean)), ...(prefs.chips ?? []).map((c) => c.toLowerCase())])].slice(0, 4);
+    const fromText = message.toLowerCase().replace(/[^\p{L}\p{N}\s,-]/gu, " ").split(/,|\band\b|\bwith\b/).map((s) => s.replace(/^(i love|i like|i'm into|i am into|i enjoy)\s+/, "").trim()).filter(Boolean);
+    const terms = [...new Set([...fromText, ...(prefs.chips ?? []).map((c) => c.toLowerCase())])].slice(0, 4);
     // Run the exact place-insights request alongside taste lookups; tag failures only mean no heatmap signal.
     const placesCall = call(`Qloo ${city} place insights`, "/v2/insights", [["filter.type", "urn:entity:place"], ["filter.location.query", city], ["take", "20"]]);
     placesCall.catch(() => {});
