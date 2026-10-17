@@ -50,43 +50,45 @@ export async function queryQloo(input: z.infer<typeof agentInput>, key: string |
   const { city, message } = agentInput.parse(input);
   if (!resolveCity(city)) throw new Error("Choose a recognized city before finding matches");
   const steps: AgentStep[] = [];
-  const call = async (label: string, path: string, params: Record<string, string>, timeoutMs = 60000) => {
+  // Query strings are built by hand so the request matches Qloo's documented form exactly (colons in URNs unescaped).
+  const call = async (label: string, path: string, params: [string, string][], timeoutMs = 60000) => {
     const start = performance.now();
+    const fail = (detail: string, locality = false) => {
+      steps.push({ label: `${label} — failed: ${detail.replace(/\s+/g, " ").slice(0, 300)}`, ms: performance.now() - start });
+      return locality ? new LocalityError(detail) : new Error(detail);
+    };
+    if (!key) throw fail("QLOO_API_KEY is not set");
+    const url = `https://hackathon.api.qloo.com${path}?${params.map(([k, v]) => `${k}=${encodeURIComponent(v).replace(/%3A/gi, ":").replace(/%2C/gi, ",")}`).join("&")}`;
+    let response: Response;
     try {
-      if (!key) throw new Error("Qloo unavailable");
-      const url = new URL(path, "https://hackathon.api.qloo.com");
-      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-      const response = await fetcher(url, { headers: { "X-Api-Key": key }, signal: AbortSignal.timeout(timeoutMs) });
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        if (response.status === 400 && /locality/i.test(body)) throw new LocalityError("Qloo cannot resolve this locality");
-        throw new Error("Qloo request failed");
-      }
-      const payload = responseSchema.parse(await response.json());
-      if (payload.success === false) throw new Error("Qloo request failed");
-      steps.push({ label, ms: performance.now() - start });
-      return payload.results;
+      response = await fetcher(url, { headers: { "X-Api-Key": key }, signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
-      steps.push({ label: `${label} — failed`, ms: performance.now() - start });
-      throw e instanceof LocalityError ? e : new Error("Qloo request failed");
+      throw fail(e instanceof Error ? `${e.name}: ${e.message}` : "network error");
     }
+    const body = await response.text().catch(() => "");
+    if (!response.ok) throw fail(`HTTP ${response.status} ${body || response.statusText}`, response.status === 400 && /locality/i.test(body));
+    let json: unknown;
+    try { json = JSON.parse(body); } catch { throw fail(`HTTP ${response.status} non-JSON body: ${body}`); }
+    const parsed = responseSchema.safeParse(json);
+    if (!parsed.success) throw fail(`HTTP ${response.status} unexpected response shape: ${parsed.error.issues.slice(0, 2).map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`);
+    if (parsed.data.success === false) throw fail(`HTTP ${response.status} success=false: ${body}`);
+    steps.push({ label, ms: performance.now() - start });
+    return parsed.data.results;
   };
   try {
     const terms = [...new Set(message.toLowerCase().replace(/[^\p{L}\p{N}\s,-]/gu, " ").split(/,|\band\b|\bwith\b/).map((s) => s.replace(/^(i love|i like|i'm into|i am into|i enjoy)\s+/, "").trim()).filter(Boolean))].slice(0, 3);
-    const tags = (await Promise.all(terms.map((term) => call(`Qloo taste lookup: ${term}`, "/v2/tags", { "filter.query": term, take: "3" })))).flatMap((r) => r.tags ?? []).map((t) => t.id).filter((id): id is string => Boolean(id));
-    const signals: Record<string, string> = tags.length ? { "signal.interests.tags": [...new Set(tags)].join(",") } : {};
-    // Both calls retain the exact selected city; a successful empty response is not an error.
-    // The heatmap endpoint requires at least one taste signal, so skip it when no tags matched.
-    const results = await Promise.allSettled([
-      tags.length
-        ? call(`Qloo ${city} neighborhood heatmap`, "/v2/insights", { "filter.type": "urn:heatmap", "filter.location.query": city, ...signals })
-        : Promise.resolve({ heatmap: [] }),
-      // Place insights hang with taste tags, so call tag-free with a tight timeout and rank by taste in code below.
-      call(`Qloo ${city} place insights`, "/v2/insights", { "filter.type": "urn:entity:place", "filter.location.query": city, take: "30" }, 8000),
-    ]);
-    const heat = results[0]; const entities = results[1];
-    if (heat.status === "rejected") throw heat.reason;
+    // Run the exact place-insights request alongside taste lookups; tag failures only mean no heatmap signal.
+    const placesCall = call(`Qloo ${city} place insights`, "/v2/insights", [["filter.type", "urn:entity:place"], ["filter.location.query", city], ["take", "20"]]);
+    placesCall.catch(() => {});
+    const tagResults = await Promise.allSettled(terms.map((term) => call(`Qloo taste lookup: ${term}`, "/v2/tags", [["filter.query", term], ["take", "3"]])));
+    const tags = [...new Set(tagResults.flatMap((r) => (r.status === "fulfilled" ? r.value.tags ?? [] : [])).map((t) => t.id).filter((id): id is string => Boolean(id)))];
+    // The heatmap endpoint requires a taste signal, so skip it when no tags matched; its failure never blocks places.
+    const heatCall = tags.length
+      ? call(`Qloo ${city} neighborhood heatmap`, "/v2/insights", [["filter.type", "urn:heatmap"], ["filter.location.query", city], ["signal.interests.tags", tags.join(",")]])
+      : (steps.push({ label: "Qloo neighborhood heatmap — skipped (no taste tags matched)", ms: 0 }), Promise.resolve({ heatmap: [] }));
+    const [entities, heat] = await Promise.allSettled([placesCall, heatCall]);
     if (entities.status === "rejected") throw entities.reason;
+    const heatValue = heat.status === "fulfilled" ? heat.value : { heatmap: [] };
     const cells = heat.value.heatmap ?? [];
     // Rank places by taste in code: count how many of the user's terms appear in each place's name or tags.
     const termScore = (p: z.infer<typeof entitySchema>) => {
