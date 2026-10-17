@@ -15,7 +15,9 @@ const entitySchema = z.object({
   }).passthrough().optional(),
 }).passthrough();
 const cellSchema = z.object({ location: z.object({ latitude: z.number(), longitude: z.number() }), query: z.object({ affinity: z.number().optional() }).passthrough() });
-const responseSchema = z.object({ success: z.boolean().optional(), results: z.object({ tags: z.array(tagSchema).optional(), entities: z.array(entitySchema).optional(), heatmap: z.array(cellSchema).optional() }) });
+// Lenient list: one malformed provider row is dropped instead of failing the whole response.
+const lenient = <T extends z.ZodTypeAny>(item: T) => z.array(z.unknown()).transform((rows) => rows.flatMap((row) => { const r = item.safeParse(row); return r.success ? [r.data as z.infer<T>] : []; })).optional();
+const responseSchema = z.object({ success: z.boolean().optional(), results: z.object({ tags: lenient(tagSchema), entities: lenient(entitySchema), heatmap: lenient(cellSchema) }).passthrough() });
 
 // Editorial comparison profiles: these are alternatives to try, never claimed Qloo coverage.
 const GROUPS = [
