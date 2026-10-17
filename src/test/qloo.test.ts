@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { queryQloo } from "@/lib/qloo";
+import { queryQloo, similarCities } from "@/lib/qloo";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const place = { name: "Café A", location: { lat: 48.85, lon: 2.35 }, tags: [{ name: "Coffee" }], properties: { locality: { neighborhood: { name: "Le Marais" } } } };
@@ -37,5 +37,35 @@ describe("queryQloo", () => {
     expect(r.status).toBe("unavailable");
     expect(r.alternatives!.length).toBeGreaterThanOrEqual(2);
     expect(r.alternatives!.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("preferences", () => {
+  it("never sends budget or pace to Qloo; taste chips become interests", async () => {
+    const { fetcher, urls } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [place] } })));
+    await queryQloo({ city: "Paris", message: "", prefs: { budget: "low", pace: "quiet", chips: ["Art"] } }, "k", fetcher);
+    expect(urls.some((u) => /low|quiet|budget|pace/i.test(u))).toBe(false);
+    expect(urls.some((u) => u.includes("/v2/tags?filter.query=art"))).toBe(true);
+  });
+
+  it("gives each neighborhood card a different Qloo place photo, or none", async () => {
+    const p = (name: string, nb: string, url?: string) => ({ ...place, name, properties: { locality: { neighborhood: { name: nb } }, ...(url ? { image: { url } } : {}) } });
+    const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [p("A", "N1", "https://x/1.jpg"), p("B", "N2", "https://x/1.jpg"), p("C", "N3")] } })));
+    const r = await queryQloo({ city: "Paris", message: "coffee" }, "k", fetcher);
+    const imgs = r.neighborhoods.map((n) => n.image).filter(Boolean);
+    expect(new Set(imgs).size).toBe(imgs.length);
+    expect(r.neighborhoods.find((n) => n.name === "N3")?.image).toBeUndefined();
+  });
+
+  it("Visiting turns the plan into a day-by-day trip", async () => {
+    const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [place] } })));
+    const r = await queryQloo({ city: "Paris", message: "coffee", prefs: { trip: "visiting" } }, "k", fetcher);
+    expect(r.plan[0].week).toBe("Day 1");
+  });
+});
+
+describe("similarCities", () => {
+  it("suggests Lagos, Abuja, Accra for Ilorin", () => {
+    expect(similarCities("Ilorin").map((c) => c.name)).toEqual(["Lagos", "Abuja", "Accra"]);
   });
 });
