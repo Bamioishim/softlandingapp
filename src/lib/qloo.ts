@@ -91,7 +91,7 @@ export async function queryQloo(input: z.infer<typeof agentInput>, key: string |
     const [entities, heat] = await Promise.allSettled([placesCall, heatCall]);
     if (entities.status === "rejected") throw entities.reason;
     const heatValue = heat.status === "fulfilled" ? heat.value : { heatmap: [] };
-    const cells = heat.value.heatmap ?? [];
+    const cells = heatValue.heatmap ?? [];
     // Rank places by taste in code: count how many of the user's terms appear in each place's name or tags.
     const termScore = (p: z.infer<typeof entitySchema>) => {
       const haystack = [p.name, ...(p.tags ?? []).map((t) => t.name)].join(" ").toLowerCase();
