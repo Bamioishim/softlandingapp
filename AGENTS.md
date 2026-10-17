@@ -11,8 +11,8 @@
 
 - Live Qloo calls cross the agent.functions.ts server boundary; qloo.ts validates and maps provider responses while sample-agent.ts contains isolated failure-only samples, so secrets remain server-only and UI stays shared.
 - Recommendations require a recognized explicit destination, independent of sample coverage; never substitute another city, to retain destination integrity.
-- Keep city photograph references centralized in src/lib/photos.ts so destination imagery changes consistently without changing the mock agent.
-- Neighborhood photo lookup uses city-and-neighborhood keys with source attribution; unavailable exact-location photos are explicitly labeled city views to avoid false geographic claims.
+- Keep city photograph references centralized in src/lib/photos.ts for panel imagery; neighborhood cards show only their own Qloo place image (distinct per card) or a plain card, to avoid misleading generic photos.
+- Similar-city suggestions come from the hardcoded list in src/lib/similar-cities.ts (country, then region, then climate), never from Qloo, so suggestions stay predictable.
 - Use shared Button, NeighborhoodCard and Timeline presentation for landing previews and chat so both experiences retain consistent controls and checklist storage.
 - Resolve cities from the local GeoNames index (CC BY 4.0) without geographic snapping; unrecognized text remains unselected to prevent arbitrary destinations.
 - Map verified Qloo place locality labels to neighborhood cards and estimate affinity from nearby heatmap cells explicitly; never fabricate labels, housing prices, or missing scores.
