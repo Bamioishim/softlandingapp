@@ -11,8 +11,6 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import type { AgentResult, AgentStep, NeighborhoodMatch, Place } from "@/lib/agent";
-import { neighborhoodPhoto, type NeighborhoodPhoto } from "@/lib/photos";
-import { wikipediaImage, wikipediaPageUrl } from "@/lib/wikipedia";
 import { Button } from "./Button";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCity } from "@/lib/cities";
@@ -91,43 +89,32 @@ export function NeighborhoodCard({
   city: string;
   index?: number;
 }) {
-  // Photo priority: curated neighborhood photo, then the Wikipedia page image
-  // for "<neighborhood>, <city>", then a city photo (distinct per card index).
-  const [photo, setPhoto] = useState<NeighborhoodPhoto>(() => neighborhoodPhoto(city, n.name, index));
-  useEffect(() => {
-    const base = neighborhoodPhoto(city, n.name, index);
-    setPhoto(base);
-    if (base.source) return;
-    let alive = true;
-    const title = `${n.name}, ${city}`;
-    wikipediaImage(title).then((src) => {
-      if (alive && src)
-        setPhoto({ src, alt: title, source: wikipediaPageUrl(title), photographer: "Wikipedia" });
-    });
-    return () => {
-      alive = false;
-    };
-  }, [city, n.name, index]);
+  // Only the card's own Qloo place photo is shown; without one, a plain cream card with the name.
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [n.image]);
   const tags = [...new Set([...n.matched, ...n.tags])].slice(0, 3);
   return (
-    <article className="neighborhood-card min-w-0">
+    <article className="neighborhood-card min-w-0" data-index={index}>
       <div className="neighborhood-image-wrap">
-        <img
-          src={photo.src}
-          alt={photo.alt}
-          className="neighborhood-photo"
-          loading="lazy"
-          decoding="async"
-        />
+        {n.image && !broken ? (
+          <img
+            src={n.image}
+            alt={n.imageAlt ? `${n.imageAlt}, ${n.name}` : n.name}
+            className="neighborhood-photo"
+            loading="lazy"
+            decoding="async"
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center p-6 text-center">
+            <span className="font-display text-3xl">{n.name}</span>
+          </div>
+        )}
         {n.scoreAvailable !== false && <span className="match-badge">
           <span className="match-dot" /> <strong>{n.score}%</strong> match
         </span>}
-        {photo.source && (
-          <a href={photo.source} target="_blank" rel="noreferrer" className="photo-credit">
-            {photo.photographer === "Wikipedia" ? "Wikipedia" : `${photo.photographer} / Unsplash`}
-          </a>
-        )}
-        {!photo.source && <span className="photo-credit">{city} · City view</span>}
+        {n.image && !broken && <span className="photo-credit">{n.imageAlt ?? "Photo"} · Qloo</span>}
+        <span className="sr-only">{city}</span>
       </div>
       <div className="mt-5 flex items-start justify-between gap-2">
         <h3 className="neighborhood-name">{n.name}</h3>

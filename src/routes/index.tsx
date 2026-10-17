@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Globe2,
 } from "lucide-react";
+import { TASTE_CHIPS, type Prefs } from "@/lib/qloo";
 import { runAgent, type AgentResult, type AgentStep, type Mode } from "@/lib/agent";
 import { flagForCountry, resolveCity, type CityResolution } from "@/lib/cities";
 import { CITY_DATA } from "@/lib/city-data";
@@ -65,6 +66,10 @@ function Index() {
   const [menu, setMenu] = useState(false);
   const [budget, setBudget] = useState("");
   const [pace, setPace] = useState("");
+  const [trip, setTrip] = useState<"moving" | "visiting">("moving");
+  const [lifeStage, setLifeStage] = useState("");
+  const [chips, setChips] = useState<string[]>([]);
+  const [climate, setClimate] = useState("");
   const [city, setCity] = useState<CityResolution | null>(null);
   const [snapNotice, setSnapNotice] = useState<string | null>(null);
   const tts = useSpeechSynthesis();
@@ -77,7 +82,7 @@ function Index() {
   voiceEnabledRef.current = voiceOn;
   const started = msgs.length > 0;
   const send = async (text: string) => {
-    const t = text.trim();
+    const t = text.trim() || chips.join(", ");
     if (!city) {
       if (t) setInput(t);
       focusDestination();
@@ -94,7 +99,10 @@ function Index() {
       { id: aid, role: "assistant", steps: [] },
     ]);
     try {
-    const result = mode === "qloo" ? await getQloo({ data: { message: t, city: city.city.name } }) : await runAgent(
+    const result = mode === "qloo" ? await getQloo({ data: { message: text.trim(), city: city.city.name, prefs: {
+      budget: (budget || undefined) as Prefs["budget"], pace: (pace || undefined) as Prefs["pace"], trip,
+      lifeStage: (lifeStage || undefined) as Prefs["lifeStage"], chips: chips as Prefs["chips"], climate: (climate || undefined) as Prefs["climate"],
+    } } }) : await runAgent(
       t,
       mode,
       (s) => {
@@ -360,7 +368,7 @@ function Index() {
                   className="destination-bar"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    send([input, budget && `Monthly budget: ${budget}`, pace && `Lifestyle pace: ${pace}`].filter(Boolean).join(". "));
+                    send(input);
                   }}
                 >
                   <div className="destination-field">
@@ -402,7 +410,7 @@ function Index() {
                       <option value="energetic">Energetic</option>
                     </select>
                   </div>
-                  {input.trim() ? (
+                  {input.trim() || chips.length ? (
                     <Button
                       variant="icon"
                       type="submit"
@@ -415,6 +423,42 @@ function Index() {
                     mic(true)
                   )}
                 </form>
+                <div className="preference-bar">
+                  <div className="preference-toggle" role="group" aria-label="Moving or visiting">
+                    {(["moving", "visiting"] as const).map((v) => (
+                      <button key={v} type="button" aria-pressed={trip === v} onClick={() => setTrip(v)} className="preference-chip">
+                        {v === "moving" ? "Moving" : "Visiting"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="destination-field">
+                    <label className="eyebrow" htmlFor="life-stage">Life stage</label>
+                    <select id="life-stage" value={lifeStage} onChange={(e) => setLifeStage(e.target.value)}>
+                      <option value="">Life stage</option>
+                      <option value="student">Student</option>
+                      <option value="young-professional">Young professional</option>
+                      <option value="family">Family</option>
+                      <option value="retiree">Retiree</option>
+                    </select>
+                  </div>
+                  <div className="destination-field">
+                    <label className="eyebrow" htmlFor="climate">Climate preference</label>
+                    <select id="climate" value={climate} onChange={(e) => setClimate(e.target.value)}>
+                      <option value="">Climate</option>
+                      <option value="warm">Warm</option>
+                      <option value="mild">Mild</option>
+                      <option value="cool">Cool</option>
+                    </select>
+                  </div>
+                  <div className="preference-chips" role="group" aria-label="Your tastes">
+                    {TASTE_CHIPS.map((c) => (
+                      <button key={c} type="button" aria-pressed={chips.includes(c)} className="preference-chip"
+                        onClick={() => setChips((cur) => (cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c]))}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {snapNotice && (
                   <p className="mt-3 rounded-xl bg-card p-3 text-xs" role="status">
                     {snapNotice}

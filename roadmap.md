@@ -10,3 +10,7 @@
 - [x] Fixed city picker bug: curated cities (e.g. Paris, France) were hidden behind GeoNames namesakes (Paris, Texas)
 
 Note: 2 pre-existing failures in src/test/city-selection.test.ts — runAgent calls a server function that needs the Start runtime, unavailable in vitest. Unrelated to these changes.
+- [x] Neighborhood cards: distinct Qloo place photo per card, else plain cream card with name
+- [x] Budget/pace only rank/filter results, never sent to Qloo
+- [x] "Isn't available yet": 2-3 hardcoded similar cities (same country/region first; Ilorin -> Lagos, Abuja, Accra)
+- [x] Pick-your-city panel: Moving/Visiting (day-by-day trip plan), Life stage, taste chips (Qloo interests), Climate (ranks similar cities)
