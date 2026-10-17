@@ -5,6 +5,7 @@
 - [x] Live Qloo end to end: Paris shows live Qloo neighborhoods and places; sample data only on Qloo failure (fixed 20s timeout -> 60s; heatmap skipped when no taste tags)
 - [x] When Qloo returns nothing: "<City> isn't available yet" + 2-3 similar cities + "Request <City>" button (verified with Lyon; insert-only policy confirmed)
 - [x] Agent steps panel collapsed by default with real call timings (verified in browser)
+- [x] Place insights send exactly filter.type, filter.location.query, take=20; real HTTP status/body shown in Agent steps on failure (Paris + Abuja verified live)
 - [x] No design changes
 - [x] Fixed city picker bug: curated cities (e.g. Paris, France) were hidden behind GeoNames namesakes (Paris, Texas)
 
