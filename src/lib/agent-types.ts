@@ -25,6 +25,7 @@ export type AgentResult = {
   city: string;
   spoken: string;
   source?: "qloo" | "sample";
+  trip?: "moving" | "visiting";
   status?: "ok" | "unavailable" | "error";
   alternatives?: { name: string; reason: string }[];
 };
