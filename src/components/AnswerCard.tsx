@@ -171,7 +171,7 @@ function PlaceCard({ p }: { p: Place }) {
     </article>
   );
 }
-export function Timeline({ plan, city }: { plan: AgentResult["plan"]; city: string }) {
+export function Timeline({ plan, city, visiting = false }: { plan: AgentResult["plan"]; city: string; visiting?: boolean }) {
   const storageKey = `soft-landing:plan:${city}:${plan.map((w) => w.items.join("|")).join("||")}`;
   const [state, setState] = useState<{ key: string; done: string[] }>({ key: "", done: [] });
   useEffect(() => {
@@ -200,10 +200,12 @@ export function Timeline({ plan, city }: { plan: AgentResult["plan"]; city: stri
       <div>
         <p className="eyebrow text-muted-foreground">Your plan</p>
         <h2 className="section-title mt-5">
-          Your first <em>30 days</em>, sorted.
+          {visiting ? <>Your trip, <em>day by day.</em></> : <>Your first <em>30 days</em>, sorted.</>}
         </h2>
         <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted-foreground">
-          A little less unknown. A few more familiar faces. One small step at a time in {city}.
+          {visiting
+            ? `Make the most of every day in ${city}, one stop at a time.`
+            : `A little less unknown. A few more familiar faces. One small step at a time in ${city}.`}
         </p>
         <div
           className="mt-8 h-1 w-full overflow-hidden rounded-full bg-border"
@@ -290,6 +292,11 @@ export function AnswerCard({ r, onChooseCity }: { r: AgentResult; onChooseCity?:
           {r.source === "sample" ? "Sample recommendations" : r.mode === "qloo" ? "Qloo-grounded answer" : "LLM-only answer"}
         </p>
         <p className="mt-4 max-w-3xl text-base leading-relaxed">{r.summary}</p>
+        {r.source === "sample" && (
+          <p role="note" className="mt-4 inline-block rounded-xl border px-4 py-2 text-xs">
+            Sample data, not from Qloo
+          </p>
+        )}
       </div>
       {r.neighborhoods.length > 0 && <div>
         <h2 className="mb-6 font-display text-4xl">
@@ -311,7 +318,7 @@ export function AnswerCard({ r, onChooseCity }: { r: AgentResult; onChooseCity?:
           ))}
         </div>
       </div>}
-      <Timeline plan={r.plan} city={r.city} />
+      <Timeline plan={r.plan} city={r.city} visiting={r.trip === "visiting"} />
       <Collapsible title="Agent steps">
         <StepList steps={r.steps} />
       </Collapsible>

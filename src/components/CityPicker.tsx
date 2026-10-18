@@ -26,7 +26,11 @@ export function CityPicker({
     return () => document.removeEventListener("mousedown", close);
   }, []);
   const pick = (name: string) => {
-    const r = resolveCity(name);
+    let r = resolveCity(name);
+    if (!r) {
+      const top = searchCities(name)[0];
+      if (top) r = resolveCity(top.name);
+    }
     if (!r) {
       setError("We couldn't locate that city. Check the spelling or choose a suggestion.");
       return;
