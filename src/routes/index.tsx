@@ -81,6 +81,45 @@ function Index() {
   const voiceEnabledRef = useRef(voiceOn);
   voiceEnabledRef.current = voiceOn;
   const started = msgs.length > 0;
+  // Core search: runs the current taste text against a given city and mode.
+  const search = async (t: string, c: CityResolution, m: Mode) => {
+    const request = ++requestRef.current;
+    setInput("");
+    setBusy(true);
+    const aid = ++idRef.current;
+    setMsgs((prev) => [
+      ...prev,
+      { id: ++idRef.current, role: "user", text: t },
+      { id: aid, role: "assistant", steps: [] },
+    ]);
+    try {
+    const result = m === "qloo" ? await getQloo({ data: { message: t, city: c.city.name, prefs: {
+      budget: (budget || undefined) as Prefs["budget"], pace: (pace || undefined) as Prefs["pace"], trip,
+      lifeStage: (lifeStage || undefined) as Prefs["lifeStage"], chips: chips as Prefs["chips"], climate: (climate || undefined) as Prefs["climate"],
+    } } }) : await runAgent(
+      t,
+      m,
+      (s) => {
+        if (request === requestRef.current)
+          setMsgs((prev) =>
+            prev.map((x) =>
+              x.id === aid && x.role === "assistant" ? { ...x, steps: [...x.steps, s] } : x,
+            ),
+          );
+      },
+      c.city.name,
+    );
+    if (request !== requestRef.current) return;
+    setMsgs((prev) => prev.map((x) => (x.id === aid ? { ...x, result } : x)));
+    setBusy(false);
+    if (voiceEnabledRef.current) tts.speak(result.spoken);
+    inputRef.current?.focus({ preventScroll: true });
+    } catch {
+      if (request !== requestRef.current) return;
+      setMsgs((prev) => prev.map((x) => x.id === aid ? { ...x, error: "Could not load recommendations. Please try again." } : x));
+      setBusy(false);
+    }
+  };
   const send = async (text: string) => {
     const t = text.trim() || chips.join(", ");
     if (!city) {
@@ -89,47 +128,26 @@ function Index() {
       return;
     }
     if (!t || busy || resetPending.current) return;
-    const request = ++requestRef.current;
-    setInput("");
-    setBusy(true);
-    const aid = ++idRef.current;
-    setMsgs((m) => [
-      ...m,
-      { id: ++idRef.current, role: "user", text: t },
-      { id: aid, role: "assistant", steps: [] },
-    ]);
-    try {
-    const result = mode === "qloo" ? await getQloo({ data: { message: text.trim(), city: city.city.name, prefs: {
-      budget: (budget || undefined) as Prefs["budget"], pace: (pace || undefined) as Prefs["pace"], trip,
-      lifeStage: (lifeStage || undefined) as Prefs["lifeStage"], chips: chips as Prefs["chips"], climate: (climate || undefined) as Prefs["climate"],
-    } } }) : await runAgent(
-      t,
-      mode,
-      (s) => {
-        if (request === requestRef.current)
-          setMsgs((m) =>
-            m.map((x) =>
-              x.id === aid && x.role === "assistant" ? { ...x, steps: [...x.steps, s] } : x,
-            ),
-          );
-      },
-      city.city.name,
-    );
-    if (request !== requestRef.current) return;
-    setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, result } : x)));
+    await search(t, city, mode);
+  };
+  // Re-run the current search against a new city and/or mode (header picker, similar cities, mode toggle).
+  const rerun = (c: CityResolution, m: Mode) => {
+    const t = tasteMessage(msgs) || chips.join(", ");
+    ++requestRef.current;
+    setMsgs([]);
+    setCity(c);
+    setSnapNotice(null);
     setBusy(false);
-    if (voiceEnabledRef.current) tts.speak(result.spoken);
-    inputRef.current?.focus({ preventScroll: true });
-    } catch {
-      if (request !== requestRef.current) return;
-      setMsgs((m) => m.map((x) => x.id === aid ? { ...x, error: "Could not load recommendations. Please try again." } : x));
-      setBusy(false);
-    }
+    tts.cancel();
+    if (t) void search(t, c, m);
   };
   const stt = useSpeechRecognition(send);
   const handleCity = (r: CityResolution) => {
-    setCity(r);
-    setSnapNotice(null);
+    if (started && r.city.name !== city?.city.name) rerun(r, mode);
+    else {
+      setCity(r);
+      setSnapNotice(null);
+    }
   };
   const focusDestination = () => {
     document.getElementById("pick-city")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -215,10 +233,14 @@ function Index() {
           key={m}
           variant="plain"
           aria-pressed={mode === m}
-          onClick={() => setMode(m)}
+          onClick={() => {
+            if (m === mode) return;
+            setMode(m);
+            if (started && city) rerun(city, m);
+          }}
           className={`rounded-full px-3 py-2 text-[10px] ${mode === m ? "bg-card" : "text-muted-foreground"}`}
         >
-          {m === "qloo" ? "Qloo-grounded" : "LLM-only"}
+          {m === "qloo" ? "Qloo-grounded" : "Without Qloo"}
         </Button>
       ))}
     </div>
@@ -564,7 +586,7 @@ function Index() {
                     {m.result ? (
                       <AnswerCard r={m.result} onChooseCity={(name) => {
                         const resolved = resolveCity(name);
-                        if (resolved) { ++requestRef.current; setMsgs([]); setCity(resolved); setBusy(false); setInput(tasteMessage(msgs)); tts.cancel(); }
+                        if (resolved) rerun(resolved, mode);
                       }} />
                     ) : m.error ? <p role="alert">{m.error}</p> : (
                       <div className="rounded-2xl border p-6">
