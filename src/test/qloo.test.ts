@@ -60,7 +60,7 @@ describe("preferences", () => {
   it("Visiting turns the plan into a day-by-day trip", async () => {
     const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [place] } })));
     const r = await queryQloo({ city: "Paris", message: "coffee", prefs: { trip: "visiting" } }, "k", fetcher);
-    expect(r.plan[0].week).toBe("Day 1");
+    expect(r.plan[0]?.week).toBe("Day 1");
   });
 });
 
