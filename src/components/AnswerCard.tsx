@@ -289,7 +289,7 @@ export function AnswerCard({ r, onChooseCity }: { r: AgentResult; onChooseCity?:
     <div className="animate-rise space-y-10">
       <div>
         <p className="eyebrow text-muted-foreground">
-          {r.source === "sample" ? "Sample recommendations" : r.mode === "qloo" ? "Qloo-grounded answer" : "LLM-only answer"}
+          {r.source === "sample" ? "Sample recommendations" : r.mode === "qloo" ? "Qloo-grounded answer" : "Without Qloo"}
         </p>
         <p className="mt-4 max-w-3xl text-base leading-relaxed">{r.summary}</p>
         {r.source === "sample" && (
