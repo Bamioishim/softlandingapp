@@ -64,6 +64,28 @@ describe("preferences", () => {
   });
 });
 
+describe("result quality rules", () => {
+  it("caps match scores at 99%, never 100%", async () => {
+    const hot = { ...place, query: { affinity: 1 } };
+    const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [hot] } })));
+    const r = await queryQloo({ city: "Paris", message: "coffee" }, "k", fetcher);
+    expect(r.neighborhoods.every((n) => n.score <= 99)).toBe(true);
+  });
+
+  it("strips size params from image URLs and prefers images 800px wide or more", async () => {
+    const p = (name: string, url: string) => ({ ...place, name, properties: { ...place.properties, image: { url } } });
+    const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [p("Small", "https://x/a.jpg?w=200&h=200"), p("Big", "https://x/b.jpg?w=1200&fit=crop")] } })));
+    const r = await queryQloo({ city: "Paris", message: "coffee" }, "k", fetcher);
+    expect(r.neighborhoods[0]?.image).toBe("https://x/b.jpg");
+  });
+
+  it("marks Visiting results so the plan heading can switch", async () => {
+    const { fetcher } = fakeFetch((u) => (u.includes("/v2/tags") ? json({ results: { tags: [] } }) : json({ results: { entities: [place] } })));
+    const r = await queryQloo({ city: "Paris", message: "coffee", prefs: { trip: "visiting" } }, "k", fetcher);
+    expect(r.trip).toBe("visiting");
+  });
+});
+
 describe("similarCities", () => {
   it("suggests Lagos, Abuja, Accra for Ilorin", () => {
     expect(similarCities("Ilorin").map((c) => c.name)).toEqual(["Lagos", "Abuja", "Accra"]);
